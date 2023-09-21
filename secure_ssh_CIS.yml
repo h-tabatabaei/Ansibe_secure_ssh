@@ -1,0 +1,64 @@
+# SSH server settings, Based on CIS Documentation about Oracle Linux 8 Hardenning
+# Before using, change myhosts to your hosts' nickname and myuser to your username (two instances! make sure you replace both or you'll be locked out of ssh!)
+- hosts: myhost
+  become: true
+  remote_user: myuser
+  tasks:
+    - name: Set Permssion for /etc/ssh/sshd_config file
+      file:
+        dest: /etc/ssh/sshd_config
+        owner: root
+        group: root
+        mode: '0600'
+    
+    - name: permissions on SSH private host key 
+      shell: |
+        find /etc/ssh -xdev -type f -name "ssh_host_*_key" -exec chmod u-x,g-wx,o-rwx {} \;
+        find /etc/ssh -xdev -type f -name "ssh_host_*_key" -exec chown root:ssh_keys {} \;
+
+    - name: permissions on SSH public host key 
+      shell: |
+        find /etc/ssh -xdev -type f -name "ssh_host_*_key.pub" -exec chmod u-x,g-wx,o-rwx {} \;
+        find /etc/ssh -xdev -type f -name "ssh_host_*_key.pub" -exec chown root:ssh_keys {} \;
+
+    - name: Make a backup from /etc/ssh/sshd_config
+      shell: cp {/etc/ssh/sshd_config,/etc/ssh/sshd_config.org.cis}
+    
+    
+    - name: enusure Allowing proper user or group to connect
+    # Only allow specific users to login remotely (may be more suitable to change this to AllowUsers).
+      lineinfile: dest=/etc/ssh/sshd_config regexp='^AllowGroups' line='AllowGroups wheel'
+    - lineinfile: dest=/etc/ssh/sshd_config regexp='^AllowUsers' line='AllowUsers oracle'
+    
+    - name: Ensure using secure Protocol and configuration
+      lineinfile: dest=/etc/ssh/sshd_config regexp='^Protocol 2' line='Protocol 2' 
+    - lineinfile: dest=/etc/ssh/sshd_config regexp='^LogLevel' line='LogLevel VERBOSE'
+    - lineinfile: dest=/etc/ssh/sshd_config regexp='^X11Forwarding' line='X11Forwarding no'
+    - lineinfile: dest=/etc/ssh/sshd_config regexp='^MaxAuthTries' line='MaxAuthTries 4'
+    - lineinfile: dest=/etc/ssh/sshd_config regexp='^IgnoreRhosts' line='IgnoreRhosts yes'
+    - lineinfile: dest=/etc/ssh/sshd_config regexp='^HostbasedAuthentication' line='HostbasedAuthentication no'
+    - lineinfile: dest=/etc/ssh/sshd_config regexp='^PermitRootLogin' line='PermitRootLogin yes'
+    - lineinfile: dest=/etc/ssh/sshd_config regexp='^PermitEmptyPasswords' line='PermitEmptyPasswords no'
+    - lineinfile: dest=/etc/ssh/sshd_config regexp='^PermitUserEnvironment' line='PermitUserEnvironment no'
+    - lineinfile: dest=/etc/ssh/sshd_config regexp='^PermitUserEnvironment' line='PermitUserEnvironment no'
+    - lineinfile: dest=/etc/ssh/sshd_config regexp='^Ciphers' line='Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr'
+    - lineinfile: dest=/etc/ssh/sshd_config regexp='^UsePam' line='UsePAM yes'
+    - lineinfile: dest=/etc/ssh/sshd_config regexp='^AllowTcpForwarding' line='AllowTcpForwarding no'
+    - lineinfile: dest=/etc/ssh/sshd_config regexp='^MaxStartups' line='MaxStartups 10:30:60'
+    - lineinfile: dest=/etc/ssh/sshd_config regexp='^MaxSessions' line='MaxSessions 10'
+    
+    - name: Setting time and Interval related configuration
+      lineinfile: dest=/etc/ssh/sshd_config regexp='^ClientAliveInterval' line='ClientAliveInterval 300'
+    - lineinfile: dest=/etc/ssh/sshd_config regexp='^ClientAliveCountMax' line='ClientAliveCountMax 0'
+    - lineinfile: dest=/etc/ssh/sshd_config regexp='^LoginGraceTime' line='LoginGraceTime 60'
+
+    - name: Set Warning Banner
+      shell: |
+        sed -i '/^Banner/d' /etc/ssh/sshd_config
+        echo "Banner /etc/issue.net" >> /etc/ssh/sshd_config
+
+    - name: sshd restart
+      ansible.builtin.service:
+        name: sshd
+        state: restarted
+        enabled: true
